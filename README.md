@@ -37,12 +37,28 @@ Si tu dongle aparece con otro ID, abre un issue con la salida de `lsusb`.
 ## Requisitos
 
 - Debian 13 (trixie), arquitectura x86_64 o arm64.
-- Conexión a internet (por cable o desde otra máquina) para descargar el driver.
+- Conexión a internet (por cable o desde otra máquina) para descargar el driver: `curl` o `wget`.
 - Permisos de `sudo`.
 - **Secure Boot desactivado.** Si lo tienes activo, el módulo del kernel no cargará
   (ver *Problemas*).
 
 ## Instalación
+
+Con `curl` y `chmod` (no hace falta git):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Richiestone18/aic8800-wifi-debian/main/install-aic8800-wifi.sh -o install-aic8800-wifi.sh
+chmod +x install-aic8800-wifi.sh
+sudo ./install-aic8800-wifi.sh
+```
+
+En una sola línea, para los que tienen prisa (misma cosa, sin dejar el archivo):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Richiestone18/aic8800-wifi-debian/main/install-aic8800-wifi.sh | sudo bash
+```
+
+O clonando el repositorio:
 
 ```bash
 git clone https://github.com/Richiestone18/aic8800-wifi-debian.git
@@ -54,8 +70,8 @@ El script hace todo esto:
 
 1. Revisa que el dongle esté conectado y detecta en qué modo está.
 2. Instala dependencias: `dkms`, `build-essential`, `eject`, `usb-modeswitch`,
-   `git` y las cabeceras (`linux-headers`) de tu kernel.
-3. Descarga y compila el driver con DKMS (tarda 1–3 minutos).
+   `curl` y las cabeceras (`linux-headers`) de tu kernel.
+3. Descarga el driver (con curl o wget, sin git) y lo compila con DKMS (1–3 minutos).
 4. Pasa el dongle de modo almacenamiento a modo WiFi si hace falta.
 5. Carga los módulos, espera la interfaz y te muestra las redes disponibles.
 

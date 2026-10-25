@@ -133,7 +133,7 @@ do_check() {
 # ---------- dependencias ----------
 ensure_deps() {
     c_info "Comprobando dependencias del sistema..."
-    local pkgs=(dkms build-essential eject usb-modeswitch git)
+    local pkgs=(dkms build-essential eject usb-modeswitch curl)
     local missing=()
     local p
 
@@ -160,19 +160,49 @@ ensure_deps() {
     c_ok "Dependencias instaladas."
 }
 
+# ---------- descarga del driver ----------
+# Descarga el código del driver sin necesidad de git (curl o wget + tar).
+# Imprime en stdout la ruta del directorio descargado.
+download_driver() {
+    local dest="$1"
+    local url="https://api.github.com/repos/Kiborgik/aic8800dc-linux-patched/tarball/HEAD"
+    local dir
+
+    mkdir -p "$dest"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --retry 3 --connect-timeout 20 -o "$dest/driver.tar.gz" "$url" || return 1
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q --tries=3 -O "$dest/driver.tar.gz" "$url" || return 1
+    else
+        return 1
+    fi
+
+    tar -xzf "$dest/driver.tar.gz" -C "$dest" >/dev/null 2>&1 || return 1
+    dir=$(find "$dest" -maxdepth 1 -mindepth 1 -type d | head -1)
+    [ -n "$dir" ] || return 1
+    printf '%s\n' "$dir"
+}
+
 # ---------- driver ----------
 build_driver() {
-    local workdir
+    local workdir src
     workdir=$(mktemp -d /tmp/aic8800-build.XXXXXX)
-    # shellcheck disable=SC2064
-    trap "rm -rf '$workdir'" RETURN
 
-    c_info "Descargando driver (${DRIVER_REPO})..."
-    git clone --depth 1 "$DRIVER_REPO" "$workdir/aic8800" >/dev/null 2>&1 \
-        || die "No pude clonar el repositorio. ¿Hay conexión a internet?"
+    c_info "Descargando driver..."
+    if ! src=$(download_driver "$workdir"); then
+        if command -v git >/dev/null 2>&1; then
+            c_warn "La descarga directa falló; lo intento con git..."
+            git clone --depth 1 "$DRIVER_REPO" "$workdir/aic8800" >/dev/null 2>&1 \
+                || die "No pude descargar el driver. ¿Hay conexión a internet?"
+            src="$workdir/aic8800"
+        else
+            die "No pude descargar el driver. Revisa la conexión a internet (o instala curl o git)."
+        fi
+    fi
 
     c_info "Compilando e instalando módulos con DKMS (tarda 1-3 minutos)..."
-    ( cd "$workdir/aic8800" && bash ./install.sh ) || die "Falló la compilación del driver. Revisa el log de arriba."
+    ( cd "$src" && bash ./install.sh ) || die "Falló la compilación del driver. Revisa el log de arriba."
+    rm -rf "$workdir"
 
     c_ok "Driver, firmware y reglas udev instalados."
 }
@@ -284,11 +314,15 @@ do_install() {
 do_uninstall() {
     need_root "$@"
     c_info "Desinstalando driver AIC8800..."
-    local workdir
+    local workdir src=""
     workdir=$(mktemp -d /tmp/aic8800-uninstall.XXXXXX)
 
-    if git clone --depth 1 "$DRIVER_REPO" "$workdir/aic8800" >/dev/null 2>&1; then
+    if src=$(download_driver "$workdir"); then
+        ( cd "$src" && bash ./uninstall.sh ) || c_warn "El script del repositorio terminó con errores; limpio a mano."
+    elif command -v git >/dev/null 2>&1 && git clone --depth 1 "$DRIVER_REPO" "$workdir/aic8800" >/dev/null 2>&1; then
         ( cd "$workdir/aic8800" && bash ./uninstall.sh ) || c_warn "El script del repositorio terminó con errores; limpio a mano."
+    else
+        c_warn "No pude descargar el desinstalador del repositorio; limpio a mano."
     fi
 
     /usr/sbin/dkms remove -m "$DRIVER_NAME" --all >/dev/null 2>&1 || true
