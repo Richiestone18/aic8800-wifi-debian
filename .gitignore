@@ -1,0 +1,17 @@
+# Basura de compilación / temporales
+*.o
+*.ko
+*.zst
+*.mod
+*.mod.c
+Module.symvers
+modules.order
+.tmp_versions/
+build/
+*.log
+
+# Editores
+*~
+*.swp
+.vscode/
+.idea/
